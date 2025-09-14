@@ -17,16 +17,31 @@ This project generates comprehensive synthetic medical data using FHIR (Fast Hea
 - MongoDB instance (local or cloud)
 - Internet connection for package installation
 
-## Quick Start
+## Quick FHIR Data Insertion
 
-### Option 1: Automated Setup (Recommended)
+A simple script to insert sample FHIR R4 data with patientId linking:
+
 ```bash
-# 1. Install dependencies
-pip install -r requirements.txt
+# Install dependencies
+uv venv
+.venv\Scripts\activate
+uv pip sync requirements.txt
 
-# 2. Run the generator (will prompt for connection options)
-python mongodb.py
+# Copy config
+copy config.env .env
+
+# Run the inserter
+python insert_fhir_data.py
 ```
+
+This creates sample Patient, Observation, Condition, and Encounter resources all linked by `patientId: "patient-001"`.
+
+## Features
+
+- 🏥 **FHIR R4 Compliant**: Sample data follows HL7 FHIR R4 standards
+- 🔗 **Patient Linking**: All resources linked via patientId field
+- 🗄️ **MongoDB Ready**: Direct insertion with proper structure
+- 📊 **Verification**: Built-in queries to verify linking works
 
 ### Option 2: Environment Variables
 ```bash
@@ -222,3 +237,241 @@ This project is open source and available under the MIT License.
 ## Contributing
 
 Feel free to submit issues, feature requests, or pull requests to improve the synthetic data generation.
+
+---
+
+# FHIR Resource Ingestor
+
+This component provides a robust FHIR R4 resource ingestion system that can process FHIR resources from JSON files or HTTP endpoints and store them in MongoDB with proper patient linking.
+
+## Features
+
+- 📁 **File Input**: Process directories containing FHIR JSON files
+- 🌐 **HTTP API**: RESTful endpoint for real-time resource ingestion
+- 🔗 **Patient Linking**: Automatic patientId derivation and interlinking
+- ✅ **Validation**: Basic FHIR R4 constraint validation
+- 🗄️ **MongoDB Optimized**: Upsert operations with proper indexing
+- 📊 **Error Handling**: Dead letter queue for failed resources
+- 📈 **Batch Processing**: Efficient bulk operations for large datasets
+
+## Supported Resource Types
+
+- Patient
+- Observation
+- Encounter
+- Condition
+- Procedure
+- MedicationRequest
+- DocumentReference
+- AllergyIntolerance
+- DiagnosticReport
+
+## Setup
+
+### Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### Configuration
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your MongoDB settings
+# MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/
+# DB_NAME=fhir_db
+```
+
+## Usage
+
+### File Mode
+Process all JSON files in a directory:
+```bash
+python fhir_ingestor.py --input-dir ./fhir_data
+```
+
+### HTTP Server Mode
+Start a REST API server:
+```bash
+python fhir_ingestor.py --http --port 5000
+```
+
+Send FHIR resources via POST:
+```bash
+curl -X POST http://localhost:5000/ingest \
+  -H "Content-Type: application/json" \
+  -d @fhir_resources.json
+```
+
+### Health Check
+```bash
+curl http://localhost:5000/health
+```
+
+## Data Model
+
+### Collections
+Each resource type gets its own collection:
+- `patients`
+- `observations`
+- `encounters`
+- `conditions`
+- `procedures`
+- `medication_requests`
+- `document_references`
+- `allergies`
+- `diagnostic_reports`
+- `dead_fhir` (for failed resources)
+
+### Document Structure
+```json
+{
+  "resourceType": "Patient",
+  "id": "pat-001",
+  "patientId": "pat-001",
+  "resource": { /* full FHIR resource */ },
+  "meta.versionId": "1",
+  "meta.lastUpdated": "2023-01-01T00:00:00Z",
+  "status": "active",
+  "code": { /* FHIR code */ },
+  "effectiveDateTime": "2023-01-01T00:00:00Z",
+  "encounterId": "enc-001"
+}
+```
+
+## Patient Linking Logic
+
+The system derives `patientId` using this priority order:
+
+1. `subject.reference` (e.g., "Patient/pat-001")
+2. `patient.reference` (e.g., "Patient/pat-001")
+3. `encounter.subject.reference` (for Encounter resources)
+4. Contained Patient resources
+
+All references are normalized to "Patient/{id}" format.
+
+## Query Examples
+
+### Find All Resources for a Patient
+```javascript
+// Get patient details
+db.patients.findOne({ id: "pat-001" })
+
+// Get all observations for a patient
+db.observations.find({ patientId: "pat-001" })
+
+// Get all conditions for a patient
+db.conditions.find({ patientId: "pat-001" })
+```
+
+### Join-like Queries
+```javascript
+// Get patient with their recent observations
+patient = db.patients.findOne({ id: "pat-001" })
+observations = db.observations.find({
+  patientId: patient.id,
+  effectiveDateTime: { $gte: "2023-01-01" }
+}).toArray()
+```
+
+### Aggregation Examples
+```javascript
+// Count resources per patient
+db.observations.aggregate([
+  { $group: { _id: "$patientId", count: { $sum: 1 } } },
+  { $sort: { count: -1 } }
+])
+
+// Find patients with specific conditions
+db.conditions.aggregate([
+  { $match: { "code.coding.code": "38341003" } }, // Hypertension
+  { $lookup: {
+      from: "patients",
+      localField: "patientId",
+      foreignField: "id",
+      as: "patient"
+    }
+  }
+])
+```
+
+## Extending to New Resource Types
+
+1. Add to `SUPPORTED_RESOURCES` dict in `fhir_ingestor.py`:
+```python
+SUPPORTED_RESOURCES = {
+    # ... existing resources
+    'Immunization': 'immunizations',
+    'CarePlan': 'care_plans'
+}
+```
+
+2. Add validation logic in `validate_resource()`:
+```python
+elif resource_type == 'Immunization':
+    if not resource.get('vaccineCode'):
+        errors.append("Immunization missing vaccineCode")
+```
+
+3. Update patient derivation if needed for the new resource type.
+
+## Error Handling
+
+### Dead Letter Queue
+Failed resources are stored in `dead_fhir` collection with:
+- Original resource
+- Failure reason
+- Error details
+- Timestamp
+
+### Common Issues
+- **Missing patient reference**: Resource cannot be linked to a patient
+- **Validation errors**: Missing required FHIR fields
+- **Storage errors**: MongoDB connection or permission issues
+
+## Performance
+
+- **Batch Size**: Default 500 resources per batch
+- **Indexes**: Automatic creation of patientId and date indexes
+- **Upsert**: Efficient updates for existing resources
+- **Connection**: Retryable writes with 10s timeouts
+
+## API Reference
+
+### POST /ingest
+Ingest an array of FHIR resources.
+
+**Request:**
+```json
+[
+  {
+    "resourceType": "Patient",
+    "id": "pat-001",
+    "name": [{"family": "Doe", "given": ["John"]}],
+    "birthDate": "1980-01-01"
+  }
+]
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "processed": 1,
+  "inserted": 1,
+  "updated": 0,
+  "errors": 0
+}
+```
+
+### GET /health
+Health check endpoint.
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "timestamp": "2023-01-01T00:00:00"
+}
+```
