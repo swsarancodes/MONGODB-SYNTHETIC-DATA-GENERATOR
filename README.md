@@ -1,53 +1,85 @@
-# Synthetic FHIR Medical Data Generator
+# MySQL Synthetic Medical Data Generator
 
-This project generates comprehensive synthetic medical data using FHIR (Fast Healthcare Interoperability Resources) standards. The generated data includes patients, observations, conditions, medication requests, and encounters - all compliant with HL7 FHIR R4 specifications.
+This project generates comprehensive synthetic medical data according to the provided Snowflake schema. The generated data includes patients, conditions, medications, encounters, allergies, and careplans - all structured according to the specified table schemas.
 
 ## Features
 
-- 🏥 **FHIR R4 Compliant**: All generated data follows HL7 FHIR R4 standards
-- 🔬 **Comprehensive Medical Data**: Patients, vitals, lab results, diagnoses, medications, and encounters
+- 🏥 **Schema Compliant**: All generated data follows the provided Snowflake schema structure
+- 🔬 **Comprehensive Medical Data**: Patients, conditions, medications, encounters, allergies, and careplans
 - 🎯 **Realistic Data**: Uses Faker library to generate realistic patient demographics and medical information
-- 🗄️ **MongoDB Integration**: Direct insertion into MongoDB collections
+- 🗄️ **MySQL Integration**: Direct insertion into MySQL tables with proper data types
 - 🔧 **Open Source**: Built with open source Python libraries
 - ⚡ **Configurable**: Easily adjust the number of patients and data volume
 
 ## Prerequisites
 
 - Python 3.8 or higher
-- MongoDB instance (local or cloud)
+- MySQL instance (local or cloud like TiDB Cloud)
 - Internet connection for package installation
 
-## Quick FHIR Data Insertion
-
-A simple script to insert sample FHIR R4 data with patientId linking:
+## Quick Setup
 
 ```bash
-# Install dependencies
-uv venv
-.venv\Scripts\activate
+# Install dependencies using uv (fast Python package manager)
 uv pip sync requirements.txt
 
 # Copy config
-copy config.env .env
+cp .env.example .env
 
-# Run the inserter
-python insert_fhir_data.py
+# Edit .env with your MySQL settings
+# MYSQL_HOST=gateway01.ap-southeast-1.prod.aws.tidbcloud.com
+# MYSQL_PORT=4000
+# MYSQL_USER=your_username
+# MYSQL_PASSWORD=your_password
+# MYSQL_DATABASE=test
+
+# Run the generator
+uv run mysql_data_generator.py
 ```
 
-This creates sample Patient, Observation, Condition, and Encounter resources all linked by `patientId: "patient-001"`.
+## Installation Options
 
-## Features
-
-- 🏥 **FHIR R4 Compliant**: Sample data follows HL7 FHIR R4 standards
-- 🔗 **Patient Linking**: All resources linked via patientId field
-- 🗄️ **MongoDB Ready**: Direct insertion with proper structure
-- 📊 **Verification**: Built-in queries to verify linking works
+### Option 1: TiDB Cloud (Recommended)
+```bash
+# 1. Sign up for TiDB Cloud at https://tidbcloud.com
+# 2. Create a cluster and get connection details
+# 3. Update .env with your TiDB connection string
+# 4. Install dependencies
+uv pip sync requirements.txt
+# 5. Run the generator
+uv run mysql_data_generator.py
+```
 
 ### Option 2: Environment Variables
 ```bash
 # 1. Copy and edit configuration
-cp config.env .env
-# Edit .env with your MongoDB settings
+cp .env.example .env
+# Edit .env with your MySQL settings
+
+# 2. Install dependencies
+uv pip sync requirements.txt
+
+# 3. Run the generator
+uv run mysql_data_generator.py
+```
+
+### Option 3: Local MySQL Only
+```bash
+# 1. Install MySQL locally
+# Windows: https://dev.mysql.com/downloads/mysql/
+# macOS: brew install mysql
+# Linux: Follow your distro's package manager
+
+# 2. Start MySQL service
+# Windows: net start mysql
+# macOS/Linux: sudo systemctl start mysql
+
+# 3. Install Python dependencies
+uv pip sync requirements.txt
+
+# 4. Run the generator
+uv run mysql_data_generator.py
+```
 
 # 2. Install dependencies
 pip install -r requirements.txt
@@ -67,136 +99,154 @@ python mongodb.py
 mongod
 
 # 3. Install Python dependencies
-pip install -r requirements.txt
+uv pip sync requirements.txt
 
 # 4. Run the generator (choose option 2 for local)
-python mongodb.py
+uv run mongodb.py
 ```
 
 ## Troubleshooting
 
 ### DNS/Network Errors
 ```
-The DNS query name does not exist: _mongodb._tcp.cluster0...
+Can't connect to MySQL server on 'gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000'
 ```
 **Solutions:**
-- ✅ **Use local MongoDB**: Choose option 2 when prompted
-- ✅ **Check Atlas cluster**: Ensure your MongoDB Atlas cluster exists and is running
-- ✅ **Update connection string**: Verify your Atlas connection string is correct
-- ✅ **Network access**: Ensure your network allows access to MongoDB Atlas
+- ✅ **Check TiDB Cloud cluster**: Ensure your TiDB Cloud cluster exists and is running
+- ✅ **Update connection details**: Verify your TiDB connection parameters in .env
+- ✅ **Network access**: Ensure your network allows access to TiDB Cloud
+- ✅ **Use local MySQL**: Switch to local MySQL if cloud access fails
 
 ### Connection Timeouts
 ```
-ServerSelectionTimeoutError: No servers found...
+Connection timed out or 2003: Can't connect to MySQL server
 ```
 **Solutions:**
-- ✅ **Check MongoDB service**: Ensure local MongoDB is running (`mongod`)
-- ✅ **Firewall settings**: Allow MongoDB ports (27017)
-- ✅ **Atlas IP whitelist**: Add your IP to Atlas network access
-- ✅ **Connection string**: Verify username/password in Atlas URI
+- ✅ **Check MySQL service**: Ensure local MySQL is running
+- ✅ **Firewall settings**: Allow MySQL ports (3306 or 4000 for TiDB)
+- ✅ **TiDB IP whitelist**: Add your IP to TiDB Cloud network access
+- ✅ **Connection parameters**: Verify host, port, username, password, and database name
 
 ### Import Errors
 ```
 Import "faker" could not be resolved
 ```
 **Solutions:**
-- ✅ **Install dependencies**: `pip install -r requirements.txt`
+- ✅ **Install dependencies**: `uv pip sync requirements.txt`
 - ✅ **Virtual environment**: Use `python -m venv venv` and activate it
 - ✅ **Python version**: Ensure Python 3.8+ is installed
 
-### Permission Errors
+### Authentication Errors
 ```
-Authentication failed
+Access denied for user
 ```
 **Solutions:**
-- ✅ **Atlas credentials**: Verify username/password in connection string
-- ✅ **Database user**: Ensure user has read/write permissions
-- ✅ **IP whitelist**: Add your IP address to Atlas network access
+- ✅ **TiDB credentials**: Verify username/password in .env
+- ✅ **Database permissions**: Ensure user has CREATE, INSERT, DELETE permissions
+- ✅ **IP whitelist**: Add your IP address to TiDB Cloud network access
 
 ## Configuration
 
-### MongoDB Connection
-Update the `MONGO_URI` variable in `mongodb.py`:
-```python
-MONGO_URI = "mongodb+srv://username:password@cluster.mongodb.net/database"
+### MySQL Connection
+Update the MySQL connection variables in `.env`:
+```bash
+MYSQL_HOST=gateway01.ap-southeast-1.prod.aws.tidbcloud.com
+MYSQL_PORT=4000
+MYSQL_USER=your_username
+MYSQL_PASSWORD=your_password
+MYSQL_DATABASE=test
 ```
 
 ### Number of Patients
-Modify the `NUM_PATIENTS` variable in `mongodb.py`:
-```python
-NUM_PATIENTS = 500  # Generate 500 patients instead of default 300
+Modify the `NUM_PATIENTS` variable in `.env` or use command line:
+```bash
+# Via environment variable
+NUM_PATIENTS=500 uv run mysql_data_generator.py
+
+# Via command line argument
+uv run mysql_data_generator.py --patients 500
 ```
 
 ## Generated Data Structure
 
-### Patients Collection
-- **Resource Type**: Patient
-- **Fields**: Demographics, identifiers, addresses, telecom, marital status
-- **Sample ID Format**: pat-001, pat-002, etc.
+### Patients Table
+- **Fields**: ID, demographics (name, birthdate, gender), addresses, healthcare expenses
+- **Sample ID Format**: 001, 002, etc.
+- **Links to**: All other tables via PATIENT field
 
-### Observations Collection
-- **Resource Type**: Observation
-- **Types**: Vital signs (BP, HR, BMI, weight, height) and lab results
-- **Linked to**: Patient resources
+### Conditions Table
+- **Fields**: Medical diagnoses with SNOMED codes
+- **Linked to**: Patients via PATIENT field
+- **Types**: Various medical conditions (diabetes, hypertension, asthma, etc.)
 
-### Conditions Collection
-- **Resource Type**: Condition
-- **Types**: Various medical diagnoses (diabetes, hypertension, asthma, etc.)
-- **Linked to**: Patient resources
+### Medications Table
+- **Fields**: Prescriptions with RxNorm codes, costs, and dispensing info
+- **Linked to**: Patients and encounters
+- **Types**: Various medications with realistic dosages
 
-### Medication Requests Collection
-- **Resource Type**: MedicationRequest
-- **Types**: Prescriptions with dosages and timing
-- **Linked to**: Patient and Encounter resources
+### Encounters Table
+- **Fields**: Healthcare visits with providers, costs, and reasons
+- **Linked to**: Patients via PATIENT field
+- **Types**: Various encounter types (check-ups, symptom visits, etc.)
+
+### Allergies Table
+- **Fields**: Allergic reactions with severity levels
+- **Linked to**: Patients via PATIENT field
+- **Types**: Food, medication, and environmental allergies
+
+### Careplans Table
+- **Fields**: Care management plans for chronic conditions
+- **Linked to**: Patients via PATIENT field
+- **Types**: Diabetes management, heart failure plans, etc.
 
 ### Encounters Collection
 - **Resource Type**: Encounter
 - **Types**: Appointments and visits
 - **Linked to**: Patient resources
 
-## FHIR Compliance
+## Schema Compliance
 
-All generated data follows HL7 FHIR R4 standards:
+All generated data follows the provided Snowflake schema structure:
 
 - **Coding Systems Used**:
   - SNOMED CT for diagnoses and procedures
-  - LOINC for lab tests and observations
   - RxNorm for medications
-  - HL7 v3 for marital status and encounter classes
 
-- **Resource Relationships**:
-  - Observations reference Patients
-  - Conditions reference Patients
-  - MedicationRequests reference Patients and Encounters
+- **Table Relationships**:
+  - Conditions reference Patients via PATIENT field
+  - Medications reference Patients and Encounters
   - Encounters reference Patients
+  - Allergies reference Patients
+  - Careplans reference Patients
 
 ## Data Volume
 
 Default generation creates:
-- **300 Patients**
-- **600-1500 Observations** (2-5 per patient)
-- **0-900 Conditions** (0-3 per patient)
-- **0-1200 Medication Requests** (0-4 per patient)
-- **300-900 Encounters** (1-3 per patient)
+- **100 Patients**
+- **0-300 Conditions** (0-3 per patient)
+- **0-400 Medications** (0-4 per patient)
+- **100-300 Encounters** (1-3 per patient)
+- **0-200 Allergies** (0-2 per patient)
+- **0-30 Careplans** (0-1 per patient, 30% probability)
 
 ## Dependencies
 
 - `faker>=15.0.0`: Generate realistic fake data
-- `pymongo>=4.0.0`: MongoDB driver for Python
+- `mysql-connector-python>=8.0.0`: MySQL driver for Python
 - `python-dotenv>=1.0.0`: Environment variable management
 - `requests>=2.25.0`: HTTP library (for future extensions)
 
 ## Security Notes
 
-- The script will **clear all existing data** in your MongoDB database
+- The script will **clear all existing data** in your MySQL database tables
 - Make sure to backup important data before running
-- Use environment variables for sensitive connection strings
+- Use environment variables for sensitive connection credentials
 - Generated data is synthetic and should not be used for real medical purposes
 
 ## Customization
 
 ### Adding New Medical Conditions
-Add to the `snomed_codes['conditions']` dictionary in `mongodb.py`:
+Add to the `snomed_codes['conditions']` dictionary in `mysql_data_generator.py`:
 ```python
 '123456789': 'New Medical Condition'
 ```
@@ -217,9 +267,9 @@ Adjust the random generation logic in the respective methods to change:
 ## Troubleshooting
 
 ### Connection Issues
-- Verify your MongoDB connection string
+- Verify your MySQL connection parameters in .env
 - Check network connectivity
-- Ensure MongoDB instance is running and accessible
+- Ensure MySQL/TiDB instance is running and accessible
 
 ### Import Errors
 - Run `pip install -r requirements.txt`
@@ -288,13 +338,13 @@ cp .env.example .env
 ### File Mode
 Process all JSON files in a directory:
 ```bash
-python fhir_ingestor.py --input-dir ./fhir_data
+uv run fhir_ingestor.py --input-dir ./fhir_data
 ```
 
 ### HTTP Server Mode
 Start a REST API server:
 ```bash
-python fhir_ingestor.py --http --port 5000
+uv run fhir_ingestor.py --http --port 5000
 ```
 
 Send FHIR resources via POST:

@@ -207,6 +207,7 @@ class FHIRDataGenerator:
         patient = {
             "resourceType": "Patient",
             "id": patient_id,
+            "patientId": patient_id,  # Add patientId for cross-collection querying consistency
             "identifier": [{
                 "system": "http://hospital.org/patient-id",
                 "value": patient_id
@@ -284,6 +285,7 @@ class FHIRDataGenerator:
         observation = {
             "resourceType": "Observation",
             "id": obs_id,
+            "patientId": patient_id,  # Add patientId for cross-collection querying
             "status": "final",
             "category": [{
                 "coding": [{
@@ -330,6 +332,7 @@ class FHIRDataGenerator:
         condition = {
             "resourceType": "Condition",
             "id": condition_id,
+            "patientId": patient_id,  # Add patientId for cross-collection querying
             "clinicalStatus": {
                 "coding": [{
                     "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
@@ -399,6 +402,7 @@ class FHIRDataGenerator:
         medication_request = {
             "resourceType": "MedicationRequest",
             "id": med_id,
+            "patientId": patient_id,  # Add patientId for cross-collection querying
             "status": random.choice(["active", "completed", "cancelled"]),
             "intent": "order",
             "medicationCodeableConcept": {
@@ -462,6 +466,7 @@ class FHIRDataGenerator:
         encounter = {
             "resourceType": "Encounter",
             "id": encounter_id,
+            "patientId": patient_id,  # Add patientId for cross-collection querying
             "status": random.choice(["finished", "in-progress", "cancelled"]),
             "class": {
                 "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
@@ -608,6 +613,14 @@ class FHIRDataGenerator:
 
 def main():
     """Main function with improved configuration"""
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Generate synthetic FHIR medical data')
+    parser.add_argument('--patients', type=int, help='Number of patients to generate')
+    parser.add_argument('--force', action='store_true', help='Skip confirmation prompt')
+
+    args = parser.parse_args()
+
     print("🏥 Synthetic FHIR Medical Data Generator")
     print("=" * 50)
 
@@ -642,23 +655,30 @@ def main():
 
     DATABASE_NAME = os.getenv('DATABASE_NAME', 'medical_db')
 
-    # Get number of patients
-    num_patients_input = input(f"\nEnter number of patients to generate [300]: ").strip()
-    try:
-        NUM_PATIENTS = int(num_patients_input) if num_patients_input else 300
-    except ValueError:
-        print("❌ Invalid number, using default: 300")
-        NUM_PATIENTS = 300
+    # Get number of patients - prioritize: args > env > default
+    if args.patients:
+        NUM_PATIENTS = args.patients
+    else:
+        num_patients_env = os.getenv('NUM_PATIENTS')
+        if num_patients_env:
+            try:
+                NUM_PATIENTS = int(num_patients_env)
+            except ValueError:
+                print(f"❌ Invalid NUM_PATIENTS in environment: {num_patients_env}, using default: 100")
+                NUM_PATIENTS = 100
+        else:
+            NUM_PATIENTS = 100  # Changed default to 100
 
     print(f"\n⚙️  Configuration:")
     print(f"   • MongoDB URI: {MONGO_URI.replace(MONGO_URI.split('@')[0].split('//')[1] if '@' in MONGO_URI else '', '***:***@') if '@' in MONGO_URI else MONGO_URI}")
     print(f"   • Database: {DATABASE_NAME}")
     print(f"   • Patients to generate: {NUM_PATIENTS}")
 
-    confirm = input("\n🚨 This will DELETE ALL existing data in the database. Continue? (y/N): ").strip().lower()
-    if confirm not in ['y', 'yes']:
-        print("❌ Operation cancelled by user")
-        return
+    if not args.force:
+        confirm = input("\n🚨 This will DELETE ALL existing data in the database. Continue? (y/N): ").strip().lower()
+        if confirm not in ['y', 'yes']:
+            print("❌ Operation cancelled by user")
+            return
 
     # Create and run the generator
     try:
@@ -669,6 +689,15 @@ def main():
 
         generator.run(num_patients=NUM_PATIENTS)
         print("\n🎉 Synthetic FHIR medical data generation completed successfully!")
+
+        # Print query examples
+        print("\n🔍 Query Examples:")
+        print("# Find all resources for a patient:")
+        print('db.patients.findOne({ "patientId": "001" })')
+        print('db.observations.find({ "patientId": "001" })')
+        print('db.conditions.find({ "patientId": "001" })')
+        print('db.encounters.find({ "patientId": "001" })')
+        print('db.medication_requests.find({ "patientId": "001" })')
 
     except Exception as e:
         print(f"\n❌ Error during execution: {e}")
